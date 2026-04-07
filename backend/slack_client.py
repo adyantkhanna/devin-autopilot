@@ -112,6 +112,52 @@ async def handle_slack_command(command: str, text: str, user_name: str, channel_
                 ],
             })
 
+        elif action == "queue":
+            issues = get_all_issues_ranked()
+            queued = [i for i in issues if (i.get("dispatch_status") or "queued") == "queued"]
+            in_prog = [i for i in issues if i.get("dispatch_status") == "in_progress"]
+            pr_open = [i for i in issues if i.get("dispatch_status") == "pr_open"]
+            done = [i for i in issues if i.get("dispatch_status") == "done"]
+
+            def fmt(i, idx=None):
+                num = f"#{i['github_number']}"
+                title = i['title'][:55]
+                fix = "✅" if i.get("auto_fixable") else "🔶"
+                rank = f"*{idx}.* " if idx else ""
+                return f"{rank}{fix} {num} {title}"
+
+            sections = []
+            if in_prog:
+                lines = "\n".join(fmt(i) for i in in_prog)
+                sections.append({"type": "section", "text": {"type": "mrkdwn", "text": f"*🔄 In Progress ({len(in_prog)})*\n{lines}"}})
+            if pr_open:
+                lines = "\n".join(f"👀 #{i['github_number']} {i['title'][:55]} → <{i.get('pr_url', '#')}|PR>" for i in pr_open)
+                sections.append({"type": "section", "text": {"type": "mrkdwn", "text": f"*👀 PRs Awaiting Review ({len(pr_open)})*\n{lines}"}})
+            if queued:
+                lines = "\n".join(fmt(i, idx+1) for idx, i in enumerate(queued[:10]))
+                remaining = len(queued) - 10
+                if remaining > 0:
+                    lines += f"\n  _...and {remaining} more_"
+                sections.append({"type": "section", "text": {"type": "mrkdwn", "text": f"*⏳ Queued ({len(queued)})*\n{lines}"}})
+            if done:
+                sections.append({"type": "section", "text": {"type": "mrkdwn", "text": f"*✅ Done:* {len(done)} issues resolved"}})
+
+            await send_slack_message({
+                "channel": channel_id,
+                "text": f"Issue queue — {len(issues)} total",
+                "blocks": [
+                    {"type": "header", "text": {"type": "plain_text", "text": f"📋 Issue Queue — {len(issues)} total"}},
+                    *sections,
+                    {"type": "divider"},
+                    {
+                        "type": "actions",
+                        "elements": [
+                            {"type": "button", "text": {"type": "plain_text", "text": "Open Dashboard"}, "url": DASHBOARD_URL},
+                        ],
+                    },
+                ],
+            })
+
         elif action == "prioritize":
             issue_number = int(args[1].replace("#", ""))
             set_manual_priority(issue_number, user_name)

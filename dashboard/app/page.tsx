@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import TopBar from '../components/TopBar';
 import StatsRow from '../components/StatsRow';
+import InsightsBanner from '../components/InsightsBanner';
 import IssueQueue from '../components/IssueQueue';
 import ActivityFeed from '../components/ActivityFeed';
 import IssueDrawer from '../components/IssueDrawer';
@@ -72,6 +73,7 @@ export default function DashboardPage() {
         onRefresh={load}
       />
       <StatsRow stats={stats} period={period} onPeriodChange={handlePeriodChange} />
+      <InsightsBanner issues={issues} stats={stats} />
       <div className="main-grid">
         <IssueQueue
           issues={issues}

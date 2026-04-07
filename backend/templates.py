@@ -102,17 +102,37 @@ A senior engineer should review the issue. You can add more context as a comment
 
 def slack_session_started(issue):
     gn = issue.get("github_number")
+    files = issue.get("affected_files", "[]")
+    if isinstance(files, str):
+        try:
+            files = json.loads(files)
+        except Exception:
+            files = []
+    files_str = ", ".join(f"`{f}`" for f in files[:3]) if files else "_unknown_"
+    complexity = issue.get("complexity_score", "?")
+    risk = issue.get("risk_level", "unknown")
+    risk_emoji = {"low": "🟢", "medium": "🟡", "high": "🔴"}.get(risk, "⚪")
+
     return {
-        "channel": None,  # filled by caller
+        "channel": None,
         "text": f"🤖 Devin started working on issue #{gn}",
         "blocks": [
             {
                 "type": "section",
-                "text": {"type": "mrkdwn", "text": f"*🤖 Devin started working*\n*Issue #{gn}:* {issue.get('title', '')}\n\nEstimated time: 15–30 min · No action needed"},
+                "text": {"type": "mrkdwn", "text": (
+                    f"*🤖 Devin started working*\n"
+                    f"*Issue #{gn}:* {issue.get('title', '')}\n\n"
+                    f"*Files:* {files_str}\n"
+                    f"*Complexity:* {complexity}/10 · *Risk:* {risk_emoji} {risk}\n\n"
+                    f"_Estimated time: 15–30 min · No action needed_"
+                )},
             },
             {
                 "type": "actions",
-                "elements": [{"type": "button", "text": {"type": "plain_text", "text": "Watch live"}, "url": f"{DASHBOARD_URL}/issues/{gn}"}],
+                "elements": [
+                    {"type": "button", "text": {"type": "plain_text", "text": "Watch live"}, "url": f"{DASHBOARD_URL}"},
+                    {"type": "button", "text": {"type": "plain_text", "text": "View issue"}, "url": f"https://github.com/{GITHUB_OWNER}/{GITHUB_REPO}/issues/{gn}"},
+                ],
             },
         ],
     }
@@ -120,19 +140,34 @@ def slack_session_started(issue):
 
 def slack_pr_ready(issue, pr_url, pr_number):
     gn = issue.get("github_number")
+    files = issue.get("affected_files", "[]")
+    if isinstance(files, str):
+        try:
+            files = json.loads(files)
+        except Exception:
+            files = []
+    files_str = ", ".join(f"`{f}`" for f in files[:3]) if files else "_see PR_"
+
     return {
         "channel": None,
         "text": f"✅ PR ready for review · Issue #{gn}",
         "blocks": [
             {
                 "type": "section",
-                "text": {"type": "mrkdwn", "text": f"*✅ PR ready for review*\n*Issue #{gn}:* {issue.get('title', '')}\n\nDevin opened PR #{pr_number} · tests passing"},
+                "text": {"type": "mrkdwn", "text": (
+                    f"*✅ PR #{pr_number} ready for review*\n"
+                    f"*Issue #{gn}:* {issue.get('title', '')}\n\n"
+                    f"*Files changed:* {files_str}\n"
+                    f"*Summary:* {issue.get('triage_summary', 'See PR for details')[:150]}\n\n"
+                    f"_Merge to auto-close the issue_"
+                )},
             },
             {
                 "type": "actions",
                 "elements": [
-                    {"type": "button", "text": {"type": "plain_text", "text": "Review PR"}, "url": pr_url},
+                    {"type": "button", "text": {"type": "plain_text", "text": "Review PR"}, "url": pr_url, "style": "primary"},
                     {"type": "button", "text": {"type": "plain_text", "text": "View issue"}, "url": f"https://github.com/{GITHUB_OWNER}/{GITHUB_REPO}/issues/{gn}"},
+                    {"type": "button", "text": {"type": "plain_text", "text": "Dashboard"}, "url": DASHBOARD_URL},
                 ],
             },
         ],
