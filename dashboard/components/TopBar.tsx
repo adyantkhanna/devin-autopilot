@@ -16,9 +16,10 @@ export default function TopBar({
           <circle cx="12" cy="12" r="10" />
           <path d="M12 8v4l3 3" />
         </svg>
-        Devin Autopilot
+        FinServ Issue Ops
         <span style={{ color: '#444', fontWeight: 400, fontSize: 13 }}>·</span>
         <a href={repoUrl} target="_blank" rel="noopener noreferrer">finserv-monorepo</a>
+        <span style={{ fontSize: 10, color: '#555', fontWeight: 400, background: '#1e1e1e', padding: '2px 8px', borderRadius: 4, marginLeft: 4 }}>powered by Devin</span>
       </h1>
       <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
         <div className="mode-toggle">

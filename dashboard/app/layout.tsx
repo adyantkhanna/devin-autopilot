@@ -1,8 +1,8 @@
 import './globals.css';
 
 export const metadata = {
-  title: 'Devin Autopilot',
-  description: 'AI-driven GitHub issue triage and dispatch'
+  title: 'FinServ Issue Ops',
+  description: 'AI-powered issue triage and resolution for FinServ engineering'
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
