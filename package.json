@@ -1,0 +1,8 @@
+{
+  "name": "devin-autopilot",
+  "type": "module",
+  "private": true,
+  "dependencies": {
+    "@octokit/rest": "^21.0.0"
+  }
+}

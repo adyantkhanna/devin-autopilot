@@ -1,0 +1,13 @@
+node_modules/
+.env
+.env.local
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+.next/
+dist/
+.DS_Store
+__pycache__/
+*.pyc
+.vercel/
