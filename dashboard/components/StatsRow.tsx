@@ -20,7 +20,7 @@ export default function StatsRow({
   ];
 
   return (
-    <div style={{ padding: '22px 28px 0' }}>
+    <div style={{ padding: '22px 28px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
         <div style={{ color: '#777', fontSize: 11, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
           Overview
