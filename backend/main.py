@@ -196,6 +196,11 @@ async def api_poll():
     await poll_active_devin_sessions()
     return {"ok": True}
 
+@app.post("/api/triage")
+async def api_triage():
+    await fetch_and_triage_new_issues()
+    return {"ok": True}
+
 @app.get("/health")
 def health():
     return {"ok": True}
