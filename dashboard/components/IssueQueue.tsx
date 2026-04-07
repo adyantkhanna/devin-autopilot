@@ -2,12 +2,13 @@
 
 import { useState, useRef, useCallback } from 'react';
 import IssueRow from './IssueRow';
+import { Issue } from '../types';
 
 export default function IssueQueue({
   issues, onSelectIssue, onRefresh, onReorderStart, onReorderEnd
 }: {
-  issues: any[];
-  onSelectIssue: (issue: any) => void;
+  issues: Issue[];
+  onSelectIssue: (issue: Issue) => void;
   onRefresh: () => void;
   onReorderStart?: () => void;
   onReorderEnd?: () => void;
@@ -17,7 +18,7 @@ export default function IssueQueue({
   const [riskFilter, setRiskFilter] = useState('all');
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [overIdx, setOverIdx] = useState<number | null>(null);
-  const [localOrder, setLocalOrder] = useState<any[] | null>(null);
+  const [localOrder, setLocalOrder] = useState<Issue[] | null>(null);
   const dragNode = useRef<HTMLDivElement | null>(null);
 
   const displayList = localOrder || issues;

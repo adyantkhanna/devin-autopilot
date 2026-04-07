@@ -1,6 +1,11 @@
+from __future__ import annotations
+
+import logging
 import httpx
-from config import GITHUB_TOKEN, GITHUB_OWNER, GITHUB_REPO, GITHUB_PROJECT_ID
+from config import GITHUB_TOKEN, GITHUB_PROJECT_ID
 from db import get_all_issues_ranked
+
+logger = logging.getLogger(__name__)
 
 STATUS_TO_COLUMN = {
     "untriaged": "Untriaged",
@@ -56,7 +61,7 @@ async def _load_field_meta():
 
 async def sync_github_project_board():
     if not GITHUB_PROJECT_ID:
-        print("[board] GITHUB_PROJECT_ID not set, skipping board sync")
+        logger.info("GITHUB_PROJECT_ID not set, skipping board sync")
         return
     try:
         status_field = await _load_field_meta()
@@ -108,6 +113,6 @@ async def sync_github_project_board():
                 "field": status_field["id"],
                 "option": option["id"],
             })
-        print("[board] Board sync complete")
+        logger.info("Board sync complete")
     except Exception as e:
-        print(f"[board] Sync error: {e}")
+        logger.error("Sync error: %s", e)

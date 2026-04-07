@@ -1,16 +1,22 @@
+from __future__ import annotations
+
+import logging
 import httpx
 
-from config import SLACK_BOT_TOKEN, SLACK_CHANNEL_ENG_ALERTS, SLACK_CHANNEL_DEVIN_OPS, DASHBOARD_URL, GITHUB_OWNER, GITHUB_REPO
+from config import SLACK_BOT_TOKEN, SLACK_CHANNEL_ENG_ALERTS, SLACK_CHANNEL_DEVIN_OPS, DASHBOARD_URL, GITHUB_OWNER, GITHUB_REPO, DEVIN_API_KEY
 from db import get_stats, get_all_issues_ranked, set_config, get_config, get_issue, set_manual_priority, log_activity, update_dispatch
 from templates import slack_morning_digest
 
+logger = logging.getLogger(__name__)
 
-async def send_slack_message(payload: dict):
+
+async def send_slack_message(payload: dict) -> dict:
+    """Post a message to Slack. Falls back to mock logging when no token is set."""
     if not payload.get("channel"):
         payload["channel"] = SLACK_CHANNEL_ENG_ALERTS
 
     if not SLACK_BOT_TOKEN:
-        print(f"[slack] (mock) {payload.get('text', '')}")
+        logger.info("(mock) %s", payload.get('text', ''))
         return {"ok": True, "mock": True}
 
     async with httpx.AsyncClient() as client:
@@ -22,7 +28,8 @@ async def send_slack_message(payload: dict):
         return resp.json()
 
 
-async def send_morning_digest():
+async def send_morning_digest() -> None:
+    """Send the daily morning backlog digest to #devin-ops."""
     stats = get_stats()
     msg = slack_morning_digest(stats)
     msg["channel"] = SLACK_CHANNEL_DEVIN_OPS
@@ -30,6 +37,7 @@ async def send_morning_digest():
 
 
 async def handle_slack_command(command: str, text: str, user_name: str, channel_id: str) -> str:
+    """Handle incoming /devin slash commands from Slack."""
     args = (text or "").strip().split()
     if command != "/devin" or not args:
         return "Unknown command"
@@ -178,7 +186,7 @@ async def handle_slack_command(command: str, text: str, user_name: str, channel_
                     try:
                         await client.post(
                             f"https://api.devin.ai/v1/sessions/{issue['devin_session_id']}/pause",
-                            headers={"Authorization": f"Bearer {__import__('config').DEVIN_API_KEY}"},
+                            headers={"Authorization": f"Bearer {DEVIN_API_KEY}"},
                         )
                     except Exception:
                         pass

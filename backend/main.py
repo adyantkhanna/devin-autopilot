@@ -1,3 +1,13 @@
+import logging
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
+    datefmt="%H:%M:%S",
+)
+
+logger = logging.getLogger(__name__)
+
 import asyncio
 from datetime import datetime
 from contextlib import asynccontextmanager
@@ -11,7 +21,7 @@ from config import PORT, RUN_ON_BOOT, SLACK_CHANNEL_DEVIN_OPS
 from db import (
     get_all_issues_ranked, get_issue, get_stats, get_recent_activity,
     get_config, set_config, set_manual_priority, reorder_issues, update_dispatch, log_activity,
-    get_completed_this_week, get_needs_human_issues,
+    get_completed_this_week, get_needs_human_issues, get_conn,
 )
 from triage import fetch_and_triage_new_issues
 from dispatcher import dispatch_issue_by_number, dispatch_next_in_queue
@@ -35,7 +45,7 @@ async def lifespan(app: FastAPI):
             from notion_client_mod import sync_notion_stats
             await sync_notion_stats(get_stats())
         except Exception as e:
-            print(f"[cron] Notion stats sync failed: {e}")
+            logger.error("Notion stats sync failed: %s", e)
     scheduler.add_job(_notion_stats, "interval", minutes=5, id="notion_stats")
 
     # Morning digest + weekly Notion digest on weekdays at 9am, Mondays also get weekly digest
@@ -49,7 +59,7 @@ async def lifespan(app: FastAPI):
                 needs_human = get_needs_human_issues()
                 await create_weekly_digest(stats, completed, needs_human)
             except Exception as e:
-                print(f"[cron] Notion weekly digest failed: {e}")
+                logger.error("Notion weekly digest failed: %s", e)
     scheduler.add_job(_morning, "cron", hour=9, minute=0, day_of_week="mon-fri", id="morning")
 
     # Autopilot dispatch every 5 min
@@ -59,8 +69,8 @@ async def lifespan(app: FastAPI):
     scheduler.add_job(_autopilot, "interval", minutes=5, id="autopilot")
 
     scheduler.start()
-    print(f"[backend] Devin Autopilot backend running on :{PORT}")
-    print(f"[backend] Mode: {get_config('mode')}")
+    logger.info("Devin Autopilot backend running on :%s", PORT)
+    logger.info("Mode: %s", get_config('mode'))
 
     if RUN_ON_BOOT:
         asyncio.create_task(fetch_and_triage_new_issues())
@@ -137,6 +147,26 @@ async def api_prioritize(number: int, request: Request):
     set_manual_priority(number, user)
     log_activity(number, "prioritized", f"{user} moved issue #{number} to top of queue", "dashboard")
     return {"ok": True}
+
+@app.post("/api/retriage")
+def api_retriage():
+    """Reset all triaged issues back to untriaged so they get re-analyzed."""
+    conn = get_conn()
+    try:
+        count = conn.execute("SELECT COUNT(*) AS c FROM issues WHERE triage_status = 'triaged' AND dispatch_status = 'queued'").fetchone()["c"]
+        conn.execute("""
+            UPDATE issues SET triage_status = 'untriaged',
+                fixability_score = NULL, impact_score = NULL, staleness_score = NULL,
+                complexity_score = NULL, priority_score = NULL, affected_files = NULL,
+                triage_summary = NULL, risk_level = NULL, auto_fixable = 0,
+                devin_instructions = NULL, needs_human_reason = NULL
+            WHERE triage_status = 'triaged' AND dispatch_status = 'queued'
+        """)
+        conn.commit()
+    finally:
+        conn.close()
+    log_activity(None, "retriage", f"Reset {count} issues for re-triage", "dashboard")
+    return {"ok": True, "reset_count": count}
 
 @app.post("/api/config/mode")
 async def api_set_mode(request: Request):

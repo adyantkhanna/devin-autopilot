@@ -1,15 +1,16 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { Issue, ActivityEvent } from '../types';
 
 export default function IssueDrawer({
   issue, onClose, onAction
 }: {
-  issue: any;
+  issue: Issue;
   onClose: () => void;
   onAction: () => void;
 }) {
-  const [detail, setDetail] = useState<any>(issue);
+  const [detail, setDetail] = useState<Issue>(issue);
   const [instructions, setInstructions] = useState('');
   const [dispatching, setDispatching] = useState(false);
 
@@ -20,16 +21,17 @@ export default function IssueDrawer({
         const res = await fetch(`/api/issues/${issue.github_number}`);
         const data = await res.json();
         if (alive) setDetail(data);
-      } catch {}
+      } catch (err) { console.error('Failed to fetch issue detail', err); }
     };
     load();
+    // Refresh drawer detail periodically (every 15s)
     const interval = setInterval(load, 15000);
     return () => { alive = false; clearInterval(interval); };
   }, [issue.github_number]);
 
   const affectedFiles: string[] = (() => {
     try { return JSON.parse(detail.affected_files || '[]'); }
-    catch { return []; }
+    catch (err) { console.error('Failed to parse affected_files', err); return []; }
   })();
 
   const act = async (path: string, body?: object) => {
@@ -39,6 +41,14 @@ export default function IssueDrawer({
       body: JSON.stringify(body || {}),
     });
     onAction();
+  };
+
+  const reloadDetail = async () => {
+    try {
+      const res = await fetch(`/api/issues/${issue.github_number}`);
+      const data = await res.json();
+      setDetail(data);
+    } catch (err) { console.error('Failed to reload issue detail', err); }
   };
 
   const handleDispatch = async () => {
@@ -53,9 +63,18 @@ export default function IssueDrawer({
         }),
       });
       setInstructions('');
+      // Backend has updated DB to in_progress — reload detail immediately
+      await reloadDetail();
       onAction();
-    } catch {}
-    setDispatching(false);
+      // Keep polling to catch further status changes
+      setTimeout(() => { reloadDetail(); onAction(); }, 3000);
+      setTimeout(() => { reloadDetail(); onAction(); }, 8000);
+    } catch (err) {
+      console.error('Failed to dispatch issue', err);
+      setDispatching(false);
+    }
+    // Don't setDispatching(false) — reloadDetail will update detail.dispatch_status
+    // which changes what the UI renders (from dispatch button to "In progress" tag)
   };
 
   const riskColor = { low: '#6fcf6f', medium: '#d4a843', high: '#cf6f6f' }[detail.risk_level as string] || '#777';
@@ -65,7 +84,7 @@ export default function IssueDrawer({
     <>
       <div className="drawer-overlay" onClick={onClose} />
       <div className="drawer">
-        <button className="close-btn" onClick={onClose}>×</button>
+        <button className="close-btn" onClick={onClose} aria-label="Close drawer">×</button>
 
         <div style={{ marginBottom: 20 }}>
           <span style={{ color: '#555', fontSize: 12, fontWeight: 500 }}>Issue #{detail.github_number}</span>
@@ -212,13 +231,62 @@ export default function IssueDrawer({
         )}
 
         {detail.activity && detail.activity.length > 0 && (
-          <div style={{ marginTop: 24 }}>
-            <div className="drawer-label" style={{ marginBottom: 10 }}>Session log</div>
-            {detail.activity.map((ev: any) => (
-              <div key={ev.id} style={{ fontSize: 11, color: '#777', padding: '8px 0', borderBottom: '1px solid #1a1a1a', lineHeight: 1.5 }}>
-                {ev.message}
-              </div>
-            ))}
+          <div style={{ marginTop: 24, borderTop: '1px solid #1e1e1e', paddingTop: 16 }}>
+            <div className="drawer-label" style={{ marginBottom: 14 }}>Session log</div>
+            <div style={{ position: 'relative', paddingLeft: 24 }}>
+              {/* Timeline line */}
+              <div style={{ position: 'absolute', left: 7, top: 6, bottom: 6, width: 1, background: '#2a2a2a' }} />
+              {[...detail.activity].reverse().map((ev: ActivityEvent, idx: number) => {
+                const iconMap: Record<string, string> = {
+                  triaged: '🔍',
+                  dispatched: '🚀',
+                  human_instructions: '📝',
+                  pr_opened: '✅',
+                  completed: '🎉',
+                  failed: '⚠️',
+                  paused: '⏸️',
+                  prioritized: '📌',
+                };
+                const colorMap: Record<string, string> = {
+                  triaged: '#8888cc',
+                  dispatched: '#d4a843',
+                  human_instructions: '#8888cc',
+                  pr_opened: '#6fcf6f',
+                  completed: '#6fcf6f',
+                  failed: '#cf6f6f',
+                  paused: '#d4a843',
+                  prioritized: '#d4a843',
+                };
+                const icon = iconMap[ev.event_type] || '•';
+                const color = colorMap[ev.event_type] || '#555';
+                const time = ev.created_at
+                  ? new Date(ev.created_at + (ev.created_at.endsWith('Z') ? '' : 'Z')).toLocaleString('en-US', {
+                      month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true
+                    })
+                  : '';
+                return (
+                  <div key={ev.id || idx} style={{ position: 'relative', paddingBottom: idx < detail.activity.length - 1 ? 16 : 0 }}>
+                    {/* Timeline dot */}
+                    <div style={{
+                      position: 'absolute', left: -20, top: 2, width: 15, height: 15,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10,
+                      zIndex: 1,
+                    }}>
+                      {icon}
+                    </div>
+                    <div style={{ fontSize: 10, color: '#555', marginBottom: 2, fontVariantNumeric: 'tabular-nums' }}>
+                      {time}
+                      {ev.triggered_by && ev.triggered_by !== 'system' && (
+                        <span style={{ marginLeft: 6, color: '#444' }}>via {ev.triggered_by}</span>
+                      )}
+                    </div>
+                    <div style={{ fontSize: 12, color, lineHeight: 1.5 }}>
+                      {ev.message}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
       </div>

@@ -1,5 +1,7 @@
 'use client';
 
+import { useEffect, useState } from 'react';
+
 export default function TopBar({
   mode, onModeChange, lastSync, onRefresh
 }: {
@@ -8,6 +10,8 @@ export default function TopBar({
   lastSync: Date;
   onRefresh: () => void;
 }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
   const repoUrl = `https://github.com/${process.env.NEXT_PUBLIC_GITHUB_OWNER || 'your-org'}/finserv-monorepo`;
   return (
     <div className="top-bar">
@@ -37,9 +41,9 @@ export default function TopBar({
           </button>
         </div>
         <span style={{ fontSize: 11, color: '#555', fontVariantNumeric: 'tabular-nums' }}>
-          {lastSync.toLocaleTimeString()}
+          {mounted ? lastSync.toLocaleTimeString() : ''}
         </span>
-        <button className="btn-secondary" onClick={onRefresh} style={{ padding: '5px 10px', fontSize: 14 }}>
+        <button className="btn-secondary" onClick={onRefresh} style={{ padding: '5px 10px', fontSize: 14 }} aria-label="Refresh data">
           ↻
         </button>
       </div>

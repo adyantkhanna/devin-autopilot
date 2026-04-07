@@ -1,22 +1,24 @@
 'use client';
 
+import { Stats } from '../types';
+
 export default function StatsRow({
   stats, period, onPeriodChange
 }: {
-  stats: any;
+  stats: Stats | null;
   period: string;
   onPeriodChange: (p: string) => void;
 }) {
-  const hoursSaved = (stats.closed || 0) * 3;
-  const periodLabel = stats.period_label || 'this week';
+  const hoursSaved = (stats?.closed || 0) * 3;
+  const periodLabel = stats?.period_label || 'this week';
 
   const cards = [
-    { label: 'Open issues', value: stats.total_open, sub: null },
-    { label: 'Devin ready', value: stats.devin_ready, sub: 'auto-fixable' },
-    { label: 'In progress', value: stats.in_progress, sub: 'right now' },
-    { label: 'PRs open', value: stats.prs_open, sub: 'awaiting review' },
-    { label: 'Dispatched', value: stats.dispatched, sub: periodLabel },
-    { label: 'Closed', value: stats.closed, sub: hoursSaved ? `~${hoursSaved}h saved` : periodLabel },
+    { label: 'Open issues', value: stats?.total_open, sub: null },
+    { label: 'Devin ready', value: stats?.devin_ready, sub: 'auto-fixable' },
+    { label: 'In progress', value: stats?.in_progress, sub: 'right now' },
+    { label: 'PRs open', value: stats?.prs_open, sub: 'awaiting review' },
+    { label: 'Dispatched', value: stats?.dispatched, sub: periodLabel },
+    { label: 'Closed', value: stats?.closed, sub: hoursSaved ? `~${hoursSaved}h saved` : periodLabel },
   ];
 
   return (

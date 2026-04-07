@@ -37,23 +37,25 @@ cp .env.example backend/.env
 ```
 
 Required variables:
-- `GITHUB_TOKEN` — GitHub personal access token
-- `GITHUB_OWNER` — Your GitHub username
+- `GITHUB_TOKEN` — GitHub personal access token (needs repo scope)
+- `GITHUB_OWNER` — Your GitHub username or org
 - `GITHUB_REPO` — Target repo name
 - `DEVIN_API_KEY` — Devin API key (from app.devin.ai)
-- `SLACK_BOT_TOKEN` — Slack bot OAuth token (optional)
-- `SLACK_CHANNEL_DEVIN_OPS` — Slack ops channel (optional)
-- `SLACK_CHANNEL_ENG_ALERTS` — Slack alerts channel (optional)
 
-### 4. Seed issues
+Optional variables:
+- `GITHUB_PROJECT_ID` — GitHub Projects v2 board ID (for project board sync)
+- `SLACK_BOT_TOKEN` — Slack bot OAuth token (for Slack integration)
+- `SLACK_SIGNING_SECRET` — Slack app signing secret (for slash command verification)
+- `SLACK_CHANNEL_DEVIN_OPS` — Slack channel for ops commands (default: `#devin-ops`)
+- `SLACK_CHANNEL_ENG_ALERTS` — Slack channel for notifications (default: `#eng-alerts`)
+- `NOTION_API_KEY` — Notion integration token (for Notion database sync)
+- `NOTION_DATABASE_ID` — Notion database ID (for issue tracking board)
+- `DASHBOARD_URL` — Dashboard URL for links in Slack messages (default: `http://localhost:3000`)
+- `BACKEND_URL` — Backend URL (default: `http://localhost:4000`)
+- `PORT` — Backend server port (default: `4000`)
+- `RUN_ON_BOOT` — Set to `1` to run fetch+triage immediately on backend start (useful for demos)
 
-```bash
-GITHUB_TOKEN=xxx GITHUB_OWNER=your-username node seed-issues-v2.js
-```
-
-Creates 12 real issues referencing actual files in the codebase.
-
-### 5. Run
+### 4. Run
 
 ```bash
 # Terminal 1 — backend
@@ -103,8 +105,7 @@ devin-autopilot/
 ├── dashboard/            Next.js App Router
 │   ├── app/              Pages + API proxy routes
 │   └── components/       UI components
-├── seed-issues-v2.js     Real issue seeder
-├── .env.example
+├── .env.example          Environment variable template
 └── README.md
 ```
 
@@ -126,11 +127,16 @@ Toggle at the top of the dashboard or via `/devin autopilot on|off`.
 
 ## Dashboard features
 
-- **Stats row** with time period filter (24h, 7d, 30d, all time)
-- **Drag-to-reorder** issue queue with persistent manual priority
-- **Issue drawer** with scores, affected files, AI instructions, session log
-- **Human instructions input** for issues that need guidance before dispatch
-- **Real-time status tracking** (queued → in progress → PR open → done)
+- **Stats row** — 6 metric cards (open issues, Devin ready, in progress, PRs open, dispatched, closed) with time period filter (24h, 7d, 30d, all time)
+- **Drag-to-reorder** issue queue with persistent manual priority override
+- **Status filter tabs** — filter queue by All, Queued, In Progress, PR Open, Done, Failed
+- **Issue drawer** — full triage detail with fixability/impact/complexity scores, affected files, risk level, AI-generated instructions, and session log timeline
+- **Session log timeline** — visual timeline with emoji icons, timestamps, and color-coded events tracking the full lifecycle (triaged → dispatched → PR opened → merged)
+- **Human instructions input** — optional for auto-fixable issues, required for needs-human issues before dispatch
+- **One-click dispatch** — dispatch from the queue row or from within the drawer
+- **Real-time status tracking** — automatic 10s polling when issues are in-progress, 30s otherwise (queued → in progress → PR open → done)
+- **Mode toggle** — switch between Supervised and Autopilot from the top bar
+- **Direct links** — "View in Devin" and "View Pull Request" buttons in the drawer
 
 ## Why Devin
 

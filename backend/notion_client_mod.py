@@ -1,9 +1,12 @@
+import logging
 import json
 from datetime import datetime
 from dateutil.parser import parse as parse_date
 from notion_client import Client
 
 from config import NOTION_API_KEY, NOTION_DATABASE_ID, GITHUB_OWNER, GITHUB_REPO
+
+logger = logging.getLogger(__name__)
 
 notion = Client(auth=NOTION_API_KEY) if NOTION_API_KEY else None
 
@@ -64,8 +67,8 @@ async def init_notion_database(parent_page_id: str) -> str:
             children=[_callout_block("📊 Stats update automatically as Devin triages and fixes issues."), _divider_block()],
         )
     except Exception as e:
-        print(f"[notion] Could not add intro blocks: {e}")
-    print(f"[notion] Database created: {db_id}")
+        logger.warning("Could not add intro blocks: %s", e)
+    logger.info("Database created: %s", db_id)
     return db_id
 
 
@@ -128,7 +131,7 @@ def _truncate(s, max_len=2000):
 async def upsert_issue_row(issue, triage, priority_rank):
     db_id = _get_db_id()
     if not db_id or not notion:
-        print("[notion] NOTION_DATABASE_ID not set, skipping upsert")
+        logger.info("NOTION_DATABASE_ID not set, skipping upsert")
         return
 
     affected = triage.get("affected_files", [])
@@ -175,12 +178,12 @@ async def upsert_issue_row(issue, triage, priority_rank):
         existing = _find_page_by_issue_number(issue.get("github_number"))
         if existing:
             notion.pages.update(page_id=existing["id"], properties=props)
-            print(f"[notion] Updated row for #{issue.get('github_number')}")
+            logger.info("Updated row for #%s", issue.get('github_number'))
         else:
             notion.pages.create(parent={"database_id": db_id}, properties=props)
-            print(f"[notion] Created row for #{issue.get('github_number')}")
+            logger.info("Created row for #%s", issue.get('github_number'))
     except Exception as e:
-        print(f"[notion] upsertIssueRow failed for #{issue.get('github_number')}: {e}")
+        logger.error("upsertIssueRow failed for #%s: %s", issue.get('github_number'), e)
 
 
 # ---- updateIssueStatus ----
@@ -202,9 +205,9 @@ async def update_issue_status(github_number, status, extra_props=None):
         if extra_props.get("completedAt"):
             props["Completed At"] = {"date": {"start": extra_props["completedAt"]}}
         notion.pages.update(page_id=existing["id"], properties=props)
-        print(f"[notion] Status updated for #{github_number} → {status}")
+        logger.info("Status updated for #%d -> %s", github_number, status)
     except Exception as e:
-        print(f"[notion] updateIssueStatus failed for #{github_number}: {e}")
+        logger.error("updateIssueStatus failed for #%d: %s", github_number, e)
 
 
 # ---- syncNotionStats ----
@@ -235,9 +238,9 @@ async def sync_notion_stats(stats):
             f"Est. Hours Saved: ~{(stats.get('closed_this_week', 0)) * 3}h"
         )
         notion.blocks.children.append(block_id=parent_id, children=[_callout_block(stats_text)])
-        print("[notion] Stats synced to parent page")
+        logger.info("Stats synced to parent page")
     except Exception as e:
-        print(f"[notion] syncNotionStats failed: {e}")
+        logger.error("syncNotionStats failed: %s", e)
 
 
 # ---- createWeeklyDigest ----
@@ -283,9 +286,9 @@ async def create_weekly_digest(stats, completed_issues=None, needs_human_issues=
             properties={"title": {"title": [{"text": {"content": f"Week of {week_of} — Devin Autopilot Summary"}}]}},
             children=children,
         )
-        print(f"[notion] Weekly digest created for week of {week_of}")
+        logger.info("Weekly digest created for week of %s", week_of)
     except Exception as e:
-        print(f"[notion] createWeeklyDigest failed: {e}")
+        logger.error("createWeeklyDigest failed: %s", e)
 
 
 def _bullet(text):

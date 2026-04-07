@@ -21,3 +21,19 @@ NOTION_DATABASE_ID = os.getenv("NOTION_DATABASE_ID", "")
 DASHBOARD_URL = os.getenv("DASHBOARD_URL", "http://localhost:3000")
 PORT = int(os.getenv("PORT", "4000"))
 RUN_ON_BOOT = os.getenv("RUN_ON_BOOT", "0") == "1"
+
+# Polling & scheduling intervals
+TRIAGE_INTERVAL_MINUTES = 5
+POLLER_INTERVAL_MINUTES = 1
+AUTOPILOT_INTERVAL_MINUTES = 5
+
+# Devin session defaults
+DEVIN_POLL_INTERVAL_SECONDS = 2
+DEVIN_TRIAGE_TIMEOUT_SECONDS = 900
+DEVIN_DISPATCH_TIMEOUT_SECONDS = 30
+
+# Dashboard
+AUTO_REFRESH_SECONDS = 30
+
+# Estimated hours saved per resolved issue (for metrics)
+HOURS_SAVED_PER_ISSUE = 3

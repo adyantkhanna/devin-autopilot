@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+import logging
 import json
 import httpx
 from datetime import datetime
@@ -8,9 +11,12 @@ from github_client import post_issue_comment, add_labels, remove_label
 from templates import session_started_comment, slack_session_started
 from slack_client import send_slack_message
 
+logger = logging.getLogger(__name__)
+
 
 def build_devin_prompt(issue: dict) -> str:
-    affected_files = []
+    """Build the full prompt sent to Devin for resolving an issue."""
+    affected_files: list[str] = []
     try:
         affected_files = json.loads(issue.get("affected_files") or "[]")
     except Exception:
@@ -54,6 +60,7 @@ HARD CONSTRAINTS:
 
 
 async def create_devin_session(prompt: str) -> dict:
+    """Create a new Devin AI session with the given prompt."""
     async with httpx.AsyncClient() as client:
         resp = await client.post(
             "https://api.devin.ai/v1/sessions",
@@ -65,12 +72,13 @@ async def create_devin_session(prompt: str) -> dict:
         return resp.json()
 
 
-async def dispatch_issue_by_number(github_number: int, triggered_by: str = "system", human_instructions: str = None) -> dict:
+async def dispatch_issue_by_number(github_number: int, triggered_by: str = "system", human_instructions: str | None = None) -> dict:
+    """Dispatch an issue to Devin for autonomous resolution."""
     issue = get_issue(github_number)
     if not issue:
         raise Exception(f"Issue #{github_number} not found")
     if issue.get("dispatch_status") == "in_progress":
-        print(f"[dispatcher] Issue #{github_number} already in progress")
+        logger.info("Issue #%d already in progress", github_number)
         return issue
 
     prompt = build_devin_prompt(issue)
@@ -80,8 +88,8 @@ async def dispatch_issue_by_number(github_number: int, triggered_by: str = "syst
 
 HUMAN ENGINEER INSTRUCTIONS (HIGH PRIORITY — follow these carefully):
 {human_instructions}"""
-        log_activity(github_number, "human_instructions", f"Human added instructions: {human_instructions[:200]}", triggered_by)
-    print(f"[dispatcher] Dispatching #{github_number} to Devin...")
+        log_activity(github_number, "human_instructions", f"Engineer added instructions: \"{human_instructions[:200]}\"", triggered_by)
+    logger.info("Dispatching #%d to Devin...", github_number)
 
     session = await create_devin_session(prompt)
     session_id = session.get("id") or session.get("session_id")
@@ -98,35 +106,43 @@ HUMAN ENGINEER INSTRUCTIONS (HIGH PRIORITY — follow these carefully):
         await remove_label(github_number, "dispatch-devin")
         await add_labels(github_number, ["devin-in-progress"])
     except Exception as e:
-        print(f"[dispatcher] Label update failed for #{github_number}: {e}")
+        logger.error("Label update failed for #%d: %s", github_number, e)
 
     try:
         await post_issue_comment(github_number, session_started_comment(issue))
     except Exception as e:
-        print(f"[dispatcher] Comment failed for #{github_number}: {e}")
+        logger.error("Comment failed for #%d: %s", github_number, e)
 
     try:
         msg = slack_session_started(issue)
         await send_slack_message(msg)
     except Exception as e:
-        print(f"[dispatcher] Slack failed for #{github_number}: {e}")
+        logger.error("Slack failed for #%d: %s", github_number, e)
 
     # Notion
     try:
         from notion_client_mod import update_issue_status
         await update_issue_status(github_number, "In Progress", {"dispatchedAt": datetime.utcnow().isoformat()})
     except Exception as e:
-        print(f"[dispatcher] Notion update failed for #{github_number}: {e}")
+        logger.error("Notion update failed for #%d: %s", github_number, e)
 
-    log_activity(github_number, "dispatched", f"Devin session started for issue #{github_number}", triggered_by)
+    files = issue.get("affected_files", "[]")
+    if isinstance(files, str):
+        try:
+            files = json.loads(files)
+        except Exception:
+            files = []
+    files_str = ", ".join(files[:3]) if files else "not specified"
+    log_activity(github_number, "dispatched", f"Devin session created and working autonomously. Targeting files: {files_str}. Triggered by {triggered_by}.", triggered_by)
     return {**issue, "session": session}
 
 
-async def dispatch_next_in_queue():
+async def dispatch_next_in_queue() -> None:
+    """Dispatch the next batch of queued issues in autopilot mode."""
     max_concurrent = int(get_config("autopilot_max_concurrent") or "2")
     next_issues = get_next_queued_for_autopilot(max_concurrent)
     for issue in next_issues:
         try:
             await dispatch_issue_by_number(issue["github_number"], "autopilot")
         except Exception as e:
-            print(f"[dispatcher] Autopilot dispatch failed for #{issue['github_number']}: {e}")
+            logger.error("Autopilot dispatch failed for #%d: %s", issue['github_number'], e)

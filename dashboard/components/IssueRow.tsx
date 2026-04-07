@@ -1,11 +1,12 @@
 'use client';
 
 import { useState } from 'react';
+import { Issue } from '../types';
 
 export default function IssueRow({
   issue, rank, onClick, onAction
 }: {
-  issue: any;
+  issue: Issue;
   rank: number;
   onClick: () => void;
   onAction: () => void;
@@ -47,10 +48,12 @@ export default function IssueRow({
             setDispatching(true);
             try {
               await fetch(`/api/issues/${issue.github_number}/dispatch`, { method: 'POST' });
-            } catch {}
-            // Refresh immediately, then again after 2s to catch backend update
+            } catch (err) { console.error('Failed to dispatch issue', err); }
+            // Refresh multiple times to catch backend status update
             onAction();
-            setTimeout(onAction, 2000);
+            setTimeout(onAction, 1500);
+            setTimeout(onAction, 3000);
+            setTimeout(onAction, 5000);
           }}
         >
           Dispatch
@@ -74,7 +77,7 @@ export default function IssueRow({
   };
 
   return (
-    <div className={`issue-row${status === 'done' || status === 'failed' ? ' issue-row-dimmed' : ''}`} onClick={onClick}>
+    <div className={`issue-row${status === 'done' || status === 'failed' ? ' issue-row-dimmed' : ''}`} onClick={onClick} role="button" tabIndex={0}>
       <span className="drag-handle" title="Drag to reorder">⠿</span>
       <span className="rank">{rank}</span>
       <div className="content">

@@ -3,19 +3,22 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import TopBar from '../components/TopBar';
 import StatsRow from '../components/StatsRow';
-import InsightsBanner from '../components/InsightsBanner';
 import IssueQueue from '../components/IssueQueue';
 import ActivityFeed from '../components/ActivityFeed';
 import IssueDrawer from '../components/IssueDrawer';
+import { Issue, Stats, ActivityEvent } from '../types';
+
+const AUTO_REFRESH_MS = 30_000;
+const DRAWER_REFRESH_MS = 15_000;
 
 export default function DashboardPage() {
-  const [issues, setIssues] = useState<any[]>([]);
-  const [stats, setStats] = useState<any>({});
-  const [activity, setActivity] = useState<any[]>([]);
+  const [issues, setIssues] = useState<Issue[]>([]);
+  const [stats, setStats] = useState<Stats | null>(null);
+  const [activity, setActivity] = useState<ActivityEvent[]>([]);
   const [mode, setMode] = useState<'supervised' | 'autopilot'>('supervised');
   const [period, setPeriod] = useState('7d');
   const [lastSync, setLastSync] = useState<Date>(new Date());
-  const [selectedIssue, setSelectedIssue] = useState<any>(null);
+  const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null);
   const reorderingRef = useRef(false);
   const periodRef = useRef(period);
   periodRef.current = period;
@@ -32,26 +35,38 @@ export default function DashboardPage() {
       if (!reorderingRef.current) {
         setIssues(Array.isArray(i) ? i : []);
       }
-      setStats(s || {});
+      setStats(s || null);
       setActivity(Array.isArray(a) ? a : []);
-      setMode((c?.mode as any) || 'supervised');
+      setMode((c?.mode as 'supervised' | 'autopilot') || 'supervised');
       setLastSync(new Date());
     } catch (err) {
       console.error('Failed to load data', err);
     }
   }, []);
 
+  // Refresh faster (10s) when issues are in-progress, otherwise 30s
+  const hasInProgress = issues.some(i => i.dispatch_status === 'in_progress');
+  const refreshIntervalRef = useRef(AUTO_REFRESH_MS);
+  refreshIntervalRef.current = hasInProgress ? 10_000 : AUTO_REFRESH_MS;
+
   useEffect(() => {
     load();
-    const interval = setInterval(load, 30000);
-    return () => clearInterval(interval);
+    let timer: ReturnType<typeof setTimeout>;
+    const tick = () => {
+      timer = setTimeout(() => {
+        load();
+        tick();
+      }, refreshIntervalRef.current);
+    };
+    tick();
+    return () => clearTimeout(timer);
   }, [load]);
 
   const handlePeriodChange = (p: string) => {
     setPeriod(p);
     periodRef.current = p;
     // Fetch stats immediately with new period
-    fetch(`/api/stats?period=${p}`).then(r => r.json()).then(s => setStats(s || {}));
+    fetch(`/api/stats?period=${p}`).then(r => r.json()).then(s => setStats(s || null));
   };
 
   const handleModeToggle = async (newMode: 'supervised' | 'autopilot') => {
@@ -73,7 +88,6 @@ export default function DashboardPage() {
         onRefresh={load}
       />
       <StatsRow stats={stats} period={period} onPeriodChange={handlePeriodChange} />
-      <InsightsBanner issues={issues} stats={stats} />
       <div className="main-grid">
         <IssueQueue
           issues={issues}

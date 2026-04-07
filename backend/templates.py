@@ -1,10 +1,16 @@
+from __future__ import annotations
+
 import json
+import logging
 from datetime import datetime
 from config import DASHBOARD_URL, GITHUB_OWNER, GITHUB_REPO
 
+logger = logging.getLogger(__name__)
+
 # ---- GitHub comment templates ----
 
-def triage_comment(issue, triage, priority_rank):
+def triage_comment(issue: dict, triage: dict, priority_rank: int) -> str:
+    """Build the GitHub comment body for a triage report."""
     fix_icon = "✅" if triage.get("auto_fixable") else "🔶"
     risk_icons = {"low": "🟢", "medium": "🟡", "high": "🔴"}
     risk_icon = risk_icons.get(triage.get("risk_level", ""), "⚪️")
@@ -51,7 +57,8 @@ def triage_comment(issue, triage, priority_rank):
 *Triaged by Devin Autopilot · [View dashboard]({DASHBOARD_URL})*"""
 
 
-def session_started_comment(issue):
+def session_started_comment(issue: dict) -> str:
+    """Build the GitHub comment body when a Devin session starts."""
     gn = issue.get("github_number")
     return f"""## 🤖 Devin is working on this
 
@@ -63,7 +70,8 @@ Session started · Devin is working autonomously on the fix.
 *Will update this thread when complete or if it needs help*"""
 
 
-def session_completed_comment(issue, pr_url, pr_number):
+def session_completed_comment(issue: dict, pr_url: str | None, pr_number: int | None) -> str:
+    """Build the GitHub comment body when Devin completes and opens a PR."""
     gn = issue.get("github_number")
     return f"""## ✅ Devin opened a PR
 
@@ -79,7 +87,8 @@ Devin completed the fix. Please review when you have a moment — if everything 
 *Ready for human review · Opened by Devin Autopilot*"""
 
 
-def session_failed_comment(issue, failure_reason):
+def session_failed_comment(issue: dict, failure_reason: str | None) -> str:
+    """Build the GitHub comment body when Devin fails to complete."""
     gn = issue.get("github_number")
     reason = failure_reason or "The fix required context or judgment that wasn't available in the issue description."
     return f"""## ⚠️ Devin got stuck
@@ -100,7 +109,8 @@ A senior engineer should review the issue. You can add more context as a comment
 
 # ---- Slack message templates ----
 
-def slack_session_started(issue):
+def slack_session_started(issue: dict) -> dict:
+    """Build the Slack message payload when a Devin session starts."""
     gn = issue.get("github_number")
     files = issue.get("affected_files", "[]")
     if isinstance(files, str):
@@ -138,7 +148,8 @@ def slack_session_started(issue):
     }
 
 
-def slack_pr_ready(issue, pr_url, pr_number):
+def slack_pr_ready(issue: dict, pr_url: str | None, pr_number: int | None) -> dict:
+    """Build the Slack message payload when a PR is ready for review."""
     gn = issue.get("github_number")
     files = issue.get("affected_files", "[]")
     if isinstance(files, str):
@@ -174,7 +185,8 @@ def slack_pr_ready(issue, pr_url, pr_number):
     }
 
 
-def slack_stuck(issue, failure_reason):
+def slack_stuck(issue: dict, failure_reason: str | None) -> dict:
+    """Build the Slack message payload when Devin gets stuck."""
     gn = issue.get("github_number")
     reason = failure_reason or "Devin found the fix is more complex than the issue description suggests."
     return {
@@ -196,7 +208,8 @@ def slack_stuck(issue, failure_reason):
     }
 
 
-def slack_morning_digest(stats):
+def slack_morning_digest(stats: dict) -> dict:
+    """Build the Slack message payload for the daily morning digest."""
     today = datetime.now().strftime("%A, %b %-d")
     oldest = f" (oldest: {stats.get('oldest_pr_hours')}h)" if stats.get("oldest_pr_hours") else ""
     hours_saved = (stats.get("closed_this_week", 0)) * 3

@@ -1,5 +1,7 @@
 'use client';
 
+import { ActivityEvent } from '../types';
+
 function timeAgo(ts: string) {
   const d = new Date(ts + (ts.endsWith('Z') ? '' : 'Z'));
   const diff = (Date.now() - d.getTime()) / 1000;
@@ -16,7 +18,7 @@ function dotColor(eventType: string) {
   return 'gray';
 }
 
-export default function ActivityFeed({ events }: { events: any[] }) {
+export default function ActivityFeed({ events }: { events: ActivityEvent[] }) {
   return (
     <div className="panel">
       <h2>Activity</h2>

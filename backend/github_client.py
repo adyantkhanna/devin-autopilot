@@ -1,5 +1,10 @@
+from __future__ import annotations
+
+import logging
 import httpx
 from config import GITHUB_TOKEN, GITHUB_OWNER, GITHUB_REPO
+
+logger = logging.getLogger(__name__)
 
 HEADERS = {
     "Authorization": f"token {GITHUB_TOKEN}",
@@ -7,7 +12,8 @@ HEADERS = {
 }
 BASE = "https://api.github.com"
 
-async def fetch_open_issues():
+async def fetch_open_issues() -> list[dict]:
+    """Fetch all open issues (excluding PRs) from the configured GitHub repo."""
     async with httpx.AsyncClient() as client:
         resp = await client.get(
             f"{BASE}/repos/{GITHUB_OWNER}/{GITHUB_REPO}/issues",
@@ -31,7 +37,8 @@ async def fetch_open_issues():
         if "pull_request" not in i
     ]
 
-async def post_issue_comment(issue_number: int, body: str):
+async def post_issue_comment(issue_number: int, body: str) -> None:
+    """Post a comment on a GitHub issue."""
     async with httpx.AsyncClient() as client:
         resp = await client.post(
             f"{BASE}/repos/{GITHUB_OWNER}/{GITHUB_REPO}/issues/{issue_number}/comments",
@@ -40,7 +47,8 @@ async def post_issue_comment(issue_number: int, body: str):
         )
         resp.raise_for_status()
 
-async def add_labels(issue_number: int, labels: list[str]):
+async def add_labels(issue_number: int, labels: list[str]) -> None:
+    """Add labels to a GitHub issue."""
     async with httpx.AsyncClient() as client:
         resp = await client.post(
             f"{BASE}/repos/{GITHUB_OWNER}/{GITHUB_REPO}/issues/{issue_number}/labels",
@@ -49,7 +57,8 @@ async def add_labels(issue_number: int, labels: list[str]):
         )
         resp.raise_for_status()
 
-async def remove_label(issue_number: int, label: str):
+async def remove_label(issue_number: int, label: str) -> None:
+    """Remove a label from a GitHub issue. Silently ignores errors."""
     async with httpx.AsyncClient() as client:
         try:
             resp = await client.delete(
@@ -73,6 +82,7 @@ async def get_pr_status(pr_number: int) -> str:
         return pr.get("state", "open")
 
 async def has_label(issue_number: int, label: str) -> bool:
+    """Check if a GitHub issue has a specific label."""
     async with httpx.AsyncClient() as client:
         resp = await client.get(
             f"{BASE}/repos/{GITHUB_OWNER}/{GITHUB_REPO}/issues/{issue_number}/labels",
