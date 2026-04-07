@@ -162,8 +162,9 @@ async def api_slack_commands(request: Request):
     text = form.get("text", "")
     user_name = form.get("user_name", "")
     channel_id = form.get("channel_id", "")
-    msg = await handle_slack_command(command, text, user_name, channel_id)
-    return {"response_type": "ephemeral", "text": msg}
+    # Respond to Slack immediately, process command in background
+    asyncio.create_task(handle_slack_command(command, text, user_name, channel_id))
+    return {"response_type": "ephemeral", "text": "Working on it..."}
 
 @app.post("/api/notion/init")
 async def api_notion_init(request: Request):
