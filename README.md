@@ -1,50 +1,63 @@
 # Devin Autopilot
 
-AI-powered GitHub issue triage + autonomous dispatch to Devin. Built for a demo to a VP of Engineering at FinServ Co.
+AI-powered GitHub issue triage and autonomous resolution system using the Devin API. Built for FinServ Co — an enterprise engineering team drowning in 300+ stale GitHub issues.
 
-## What this is
+## What this does
 
-A backend that polls GitHub, triages issues with Claude, dispatches auto-fixable ones to Devin, posts progress to GitHub + Slack, and surfaces everything through a Next.js dashboard.
+A system that ingests GitHub issues, uses Devin to batch-triage them (scoring fixability, impact, complexity, risk), ranks them by priority, and dispatches auto-fixable ones to Devin for autonomous code fixes. Engineers stay in the loop via a real-time dashboard, Slack notifications, and GitHub comments — without babysitting the process.
+
+## How it works
+
+1. **Ingest** — Polls GitHub for open issues every 5 minutes
+2. **Triage** — Sends all untriaged issues to Devin in a single batch session. Devin analyzes each issue and returns fixability, impact, complexity scores, affected files, and whether it can be auto-fixed
+3. **Prioritize** — Ranks issues using: `fixability×0.4 + impact×0.3 + staleness×0.2 + (10-complexity)×0.1`. Engineers can override by dragging rows or using `/devin prioritize`
+4. **Dispatch** — One-click dispatch from dashboard, Slack command, or autopilot mode. Devin clones the repo, reads the code, makes the fix, runs tests, and opens a PR
+5. **Track** — Poller monitors Devin sessions, detects PRs, tracks merges. Updates flow to dashboard, Slack, GitHub comments, and Notion
 
 ## Setup
 
-### 1. Fork the target repo
+### 1. Create the target repo
 
-Fork `https://github.com/vercel/turborepo` into your GitHub account and rename it to `finserv-monorepo` (public).
+Create a GitHub repo (or fork an existing monorepo) and enable Issues.
 
 ### 2. Install dependencies
 
 ```bash
-cd backend && npm install
-cd ../dashboard && npm install
+# Backend (Python)
+cd backend && pip install -r requirements.txt
+
+# Dashboard (Next.js)
+cd dashboard && npm install
 ```
 
 ### 3. Configure environment
 
 ```bash
 cp .env.example backend/.env
-# Fill in GITHUB_TOKEN, ANTHROPIC_API_KEY, DEVIN_API_KEY, SLACK_*
 ```
 
-The dashboard reads `BACKEND_URL` (defaults to `http://localhost:4000`).
+Required variables:
+- `GITHUB_TOKEN` — GitHub personal access token
+- `GITHUB_OWNER` — Your GitHub username
+- `GITHUB_REPO` — Target repo name
+- `DEVIN_API_KEY` — Devin API key (from app.devin.ai)
+- `SLACK_BOT_TOKEN` — Slack bot OAuth token (optional)
+- `SLACK_CHANNEL_DEVIN_OPS` — Slack ops channel (optional)
+- `SLACK_CHANNEL_ENG_ALERTS` — Slack alerts channel (optional)
 
-### 4. Seed issues + labels
+### 4. Seed issues
 
 ```bash
-GITHUB_TOKEN=xxx GITHUB_OWNER=your-username node seed-issues.js
+GITHUB_TOKEN=xxx GITHUB_OWNER=your-username node seed-issues-v2.js
 ```
 
-This creates the 12 demo issues and all required labels.
+Creates 12 real issues referencing actual files in the codebase.
 
-### 5. (Optional) Create the Project board
-
-Create a GitHub Project v2 named "Devin Autopilot" with a **Status** single-select field containing these options: `Untriaged`, `Devin Ready`, `Needs Human`, `In Progress`, `PR Open`, `Closed`. Then set `GITHUB_PROJECT_ID` in `.env` to the project's node ID.
-
-### 6. Run
+### 5. Run
 
 ```bash
 # Terminal 1 — backend
-cd backend && RUN_ON_BOOT=1 npm start
+cd backend && RUN_ON_BOOT=1 python3 main.py
 
 # Terminal 2 — dashboard
 cd dashboard && npm run dev
@@ -57,61 +70,68 @@ Open `http://localhost:3000`.
 ```
 GitHub repo (issues)
     ↓ poll every 5 min
-Backend (Express + SQLite)
-    ↓ LLM triage (Claude Opus)
-    ↓ comment + label + board move
-    ↓ dispatch → Devin API
-    ↓ poll session → PR comment + Slack
+Backend (FastAPI + SQLite + APScheduler)
+    ↓ batch triage via Devin API
+    ↓ comment + label on GitHub
+    ↓ dispatch → Devin API (creates session)
+    ↓ poll session → detect PR → track merge
 Dashboard (Next.js)
     ↔ reads/writes via backend API
 Slack
-    ← notifications
-    → slash commands → backend
+    ← notifications (dispatch, PR ready, stuck)
+    → slash commands (/devin status, dispatch, prioritize)
+Notion (optional)
+    ← database sync, weekly digest, stats
 ```
 
 ## File layout
 
 ```
 devin-autopilot/
-├── backend/        Express + SQLite + cron
-│   ├── index.js
-│   ├── db.js
-│   ├── github.js
-│   ├── triage.js
-│   ├── dispatcher.js
-│   ├── poller.js
-│   ├── slack.js
-│   ├── board.js
-│   └── templates.js
-├── dashboard/      Next.js App Router
-│   ├── app/
-│   └── components/
-├── seed-issues.js
+├── backend/              FastAPI + SQLite + APScheduler
+│   ├── main.py           API endpoints + cron jobs
+│   ├── db.py             SQLite schema + CRUD
+│   ├── triage.py         Batch Devin triage
+│   ├── dispatcher.py     Devin session creation + prompt building
+│   ├── poller.py         Session status + PR merge tracking
+│   ├── github_client.py  GitHub API (issues, comments, labels, PRs)
+│   ├── slack_client.py   Slack notifications + slash commands
+│   ├── notion_client_mod.py  Notion database sync
+│   ├── board.py          GitHub Projects v2 board sync
+│   ├── templates.py      GitHub comment + Slack message templates
+│   └── config.py         Environment variable loading
+├── dashboard/            Next.js App Router
+│   ├── app/              Pages + API proxy routes
+│   └── components/       UI components
+├── seed-issues-v2.js     Real issue seeder
 ├── .env.example
 └── README.md
 ```
 
 ## Operating modes
 
-- **Supervised** (default): Triages and scores everything but waits for a human to dispatch via dashboard button, `dispatch-devin` label, or `/devin dispatch #N` in Slack.
-- **Autopilot**: Cron job dispatches the top N `devin-ready` issues automatically every 5 min. Concurrency limit: `autopilot_max_concurrent` in `system_config`.
+- **Supervised** (default): Devin triages and scores everything, but waits for a human to dispatch via the dashboard, GitHub label, or `/devin dispatch #N` in Slack.
+- **Autopilot**: Automatically dispatches the top N queued auto-fixable issues every 5 minutes. Concurrency controlled by `autopilot_max_concurrent`.
 
 Toggle at the top of the dashboard or via `/devin autopilot on|off`.
 
 ## Slack commands
 
-- `/devin status` — snapshot of queue
-- `/devin prioritize #N` — move issue to top
-- `/devin dispatch #N` — dispatch immediately
-- `/devin stop #N` — pause active session
-- `/devin autopilot on|off` — flip mode
+- `/devin status` — executive status report with metrics, in-progress items, PRs awaiting review
+- `/devin status 24h|7d|30d` — status filtered by time period
+- `/devin dispatch #N` — dispatch an issue to Devin
+- `/devin prioritize #N` — move issue to top of queue
+- `/devin stop #N` — pause an active Devin session
+- `/devin autopilot on|off` — toggle operating mode
 
-Point your Slack app's slash commands at `POST /api/slack/commands`.
+## Dashboard features
 
-## Prioritization
+- **Stats row** with time period filter (24h, 7d, 30d, all time)
+- **Drag-to-reorder** issue queue with persistent manual priority
+- **Issue drawer** with scores, affected files, AI instructions, session log
+- **Human instructions input** for issues that need guidance before dispatch
+- **Real-time status tracking** (queued → in progress → PR open → done)
 
-```
-priority_score = fixability*0.4 + impact*0.3 + staleness*0.2 + complexity_inverse*0.1
-```
+## Why Devin
 
-Manual overrides (drag on dashboard, `/devin prioritize`) always beat the LLM score and are stored with user + timestamp.
+Unlike other coding agents, Devin runs full autonomous sessions — it clones the repo, reads and understands context across files, makes targeted fixes, runs tests, and opens PRs. This system uses Devin for both the intelligence layer (triage/analysis) and the execution layer (code fixes), creating an end-to-end pipeline from issue to merged PR.
